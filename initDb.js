@@ -1,12 +1,13 @@
 const readlineSync = require('readline-sync');
 const { Client } = require('pg');
+const bcrypt = require('bcryptjs');
 
 const host = readlineSync.question('Enter PostgreSQL host (default: localhost): ', { defaultInput: 'localhost' });
 const port = readlineSync.question('Enter PostgreSQL port (default: 5432): ', { defaultInput: '5432' });
-const user = readlineSync.question('Enter PostgreSQL username: ');
-const password = readlineSync.question('Enter PostgreSQL password: ', { hideEchoBack: true });
-const database = readlineSync.question('Enter PostgreSQL database name: ');
-const schemaName = readlineSync.question('Enter schema name: ');
+const user = readlineSync.question('Enter PostgreSQL username: ', { defaultInput: 'postgres' });
+const password = readlineSync.question('Enter PostgreSQL password: ', { hideEchoBack: true }, { defaultInput: 'postgres' });
+const database = readlineSync.question('Enter PostgreSQL database name: ', { defaultInput: 'mojabaza' });
+const schemaName = readlineSync.question('Enter schema name: ', { defaultInput: 'mojasema' });
 
 async function connectToPostgres() {
   const client = new Client({
@@ -58,7 +59,6 @@ async function createSchema(client, schemaName) {
 
 async function executeDDL(client, schemaName) {
     try {
-      // Set the schema search path
       await client.query(`SET search_path TO "${schemaName}"`);
   
       const ddl = `
@@ -117,6 +117,8 @@ async function main() {
 
     await executeDDL(client, schemaName);
 
+    await createUser(client, schemaName);
+
   } catch (err) {
     console.error('Error:', err.message);
   } finally {
@@ -124,5 +126,26 @@ async function main() {
     console.log('PostgreSQL connection closed.');
   }
 }
+
+async function createUser(client, schemaName) {
+    try {
+      const username = readlineSync.question('Enter username: ');
+      const email = readlineSync.question('Enter email: ');
+      const plainPassword = readlineSync.question('Enter password: ', { hideEchoBack: true });
+  
+      const hashedPassword = await bcrypt.hash(plainPassword, 10);
+  
+      const insertUserQuery = `
+        INSERT INTO "${schemaName}".users (username, password, email)
+        VALUES ($1, $2, $3)
+        RETURNING id, username, email;
+      `;
+      const res = await client.query(insertUserQuery, [username, hashedPassword, email]);
+  
+      console.log('User created:', res.rows[0]);
+    } catch (error) {
+      console.error('Error creating user:', error.message);
+    }
+  }
 
 main();
