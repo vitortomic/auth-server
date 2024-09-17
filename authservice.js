@@ -56,7 +56,7 @@ class AuthService {
     }
   }
 
-  async createToken(username) {
+  async createToken(userId) {
     try {
       const header = {
         alg: 'HS256',
@@ -64,7 +64,7 @@ class AuthService {
       };
 
       const payload = {
-        username,
+        userId,
         exp: Math.floor(Date.now() / 1000) + (60 * 60) // Expiration time: 1 hour from now
       };
 
@@ -81,13 +81,7 @@ class AuthService {
         .replace(/=+$/, '');
 
       const dataToSign = `${base64Header}.${base64Payload}`;
-      const signature = crypto
-        .createHmac('sha256', this.jwtSecret)
-        .update(dataToSign)
-        .digest('base64')
-        .replace(/\+/g, '-')
-        .replace(/\//g, '_')
-        .replace(/=+$/, '');
+      const signature = this.getSignature(dataToSign)
 
       const token = `${base64Header}.${base64Payload}.${signature}`;
       console.log('Token created:', token);
@@ -104,13 +98,7 @@ class AuthService {
       const [base64Header, base64Payload, signature] = token.split('.');
 
       const dataToSign = `${base64Header}.${base64Payload}`;
-      const recalculatedSignature = crypto
-        .createHmac('sha256', this.jwtSecret)
-        .update(dataToSign)
-        .digest('base64')
-        .replace(/\+/g, '-')
-        .replace(/\//g, '_')
-        .replace(/=+$/, '');
+      const recalculatedSignature = this.getSignature(dataToSign)
 
       if (signature !== recalculatedSignature) {
         console.log('Invalid token signature.');
@@ -130,6 +118,17 @@ class AuthService {
       return { valid: false, message: 'Invalid token' };
     }
   }
+
+  getSignature(dataToSign) {
+    return crypto
+    .createHmac('sha256', this.jwtSecret)
+    .update(dataToSign)
+    .digest('base64')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_')
+    .replace(/=+$/, '');
+  }
+
 }
 
 module.exports = AuthService;
