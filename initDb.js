@@ -1,13 +1,16 @@
-const readlineSync = require('readline-sync');
 const { Client } = require('pg');
 const bcrypt = require('bcryptjs');
+const dotenv = require('dotenv');
+const readlineSync = require('readline-sync');
 
-const host = readlineSync.question('Enter PostgreSQL host (default: localhost): ', { defaultInput: 'localhost' });
-const port = readlineSync.question('Enter PostgreSQL port (default: 5432): ', { defaultInput: '5432' });
-const user = readlineSync.question('Enter PostgreSQL username: ', { defaultInput: 'postgres' });
-const password = readlineSync.question('Enter PostgreSQL password: ', { hideEchoBack: true }, { defaultInput: 'postgres' });
-const database = readlineSync.question('Enter PostgreSQL database name: ', { defaultInput: 'mojabaza' });
-const schemaName = readlineSync.question('Enter schema name: ', { defaultInput: 'mojasema' });
+dotenv.config({ path: 'credentials.conf' });
+
+const host = process.env.DB_HOST;
+const port = process.env.DB_PORT;
+const user = process.env.DB_USER;
+const password = process.env.DB_PASSWORD;
+const database = process.env.DB_DATABASE;
+const schemaName = process.env.DB_SCHEMA;
 
 async function connectToPostgres() {
   const client = new Client({
@@ -58,34 +61,34 @@ async function createSchema(client, schemaName) {
 }
 
 async function executeDDL(client, schemaName) {
-    try {
-      await client.query(`SET search_path TO "${schemaName}"`);
-  
-      const ddl = `
-        -- Create 'user' table
-        CREATE TABLE IF NOT EXISTS users (
-          id SERIAL PRIMARY KEY,
-          username VARCHAR(100) NOT NULL UNIQUE,
-          password VARCHAR(255) NOT NULL,
-          email VARCHAR(100) NOT NULL UNIQUE
-        );
-        
-        -- Create 'token' table for JWT tokens
-        CREATE TABLE IF NOT EXISTS tokens (
-          id SERIAL PRIMARY KEY,
-          token TEXT NOT NULL,
-          user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
-          expires_at TIMESTAMP NOT NULL
-        );
-      `;
+  try {
+    await client.query(`SET search_path TO "${schemaName}"`);
+
+    const ddl = `
+      -- Create 'user' table
+      CREATE TABLE IF NOT EXISTS users (
+        id SERIAL PRIMARY KEY,
+        username VARCHAR(100) NOT NULL UNIQUE,
+        password VARCHAR(255) NOT NULL,
+        email VARCHAR(100) NOT NULL UNIQUE
+      );
       
-      await client.query(ddl);
-      console.log('DDL executed successfully.');
-  
-    } catch (error) {
-      console.error('Error executing DDL:', error.message);
-    }
+      -- Create 'token' table for JWT tokens
+      CREATE TABLE IF NOT EXISTS tokens (
+        id SERIAL PRIMARY KEY,
+        token TEXT NOT NULL,
+        user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+        expires_at TIMESTAMP NOT NULL
+      );
+    `;
+    
+    await client.query(ddl);
+    console.log('DDL executed successfully.');
+
+  } catch (error) {
+    console.error('Error executing DDL:', error.message);
   }
+}
 
 async function main() {
   let client;
@@ -128,24 +131,24 @@ async function main() {
 }
 
 async function createUser(client, schemaName) {
-    try {
-      const username = readlineSync.question('Enter username: ');
-      const email = readlineSync.question('Enter email: ');
-      const plainPassword = readlineSync.question('Enter password: ', { hideEchoBack: true });
-  
-      const hashedPassword = await bcrypt.hash(plainPassword, 10);
-  
-      const insertUserQuery = `
-        INSERT INTO "${schemaName}".users (username, password, email)
-        VALUES ($1, $2, $3)
-        RETURNING id, username, email;
-      `;
-      const res = await client.query(insertUserQuery, [username, hashedPassword, email]);
-  
-      console.log('User created:', res.rows[0]);
-    } catch (error) {
-      console.error('Error creating user:', error.message);
-    }
+  try {
+    const username = readlineSync.question('Enter username: ');
+    const email = readlineSync.question('Enter email: ');
+    const plainPassword = readlineSync.question('Enter password: ', { hideEchoBack: true });
+
+    const hashedPassword = await bcrypt.hash(plainPassword, 10);
+
+    const insertUserQuery = `
+      INSERT INTO "${schemaName}".users (username, password, email)
+      VALUES ($1, $2, $3)
+      RETURNING id, username, email;
+    `;
+    const res = await client.query(insertUserQuery, [username, hashedPassword, email]);
+
+    console.log('User created:', res.rows[0]);
+  } catch (error) {
+    console.error('Error creating user:', error.message);
   }
+}
 
 main();
