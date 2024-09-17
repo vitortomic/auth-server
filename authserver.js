@@ -1,12 +1,10 @@
 const express = require('express');
 const bodyParser = require('body-parser');
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
-const { v4: uuidv4 } = require('uuid');
 const crypto = require('crypto');
 
-const AuthService = require('./authservice');
+const AuthService = require('./authService');
 const UserService = require('./userService');
+const DBConnection = require('./dbConnection');
 
 const app = express();
 const port = 3001;
@@ -14,49 +12,40 @@ const jwtSecret = crypto.randomBytes(32).toString('base64');
 
 app.use(bodyParser.json());
 
-const schemaName = 'mojasema'; 
-const authService = new AuthService({
+const schemaName = 'mojasema';
+const dbConfig = {
   host: 'localhost',
   port: 5432,
   user: 'postgres',
   password: 'postgres',
-  database: 'mojabaza',
-}, 
-schemaName,
-jwtSecret);
+  database: 'mojabaza'
+};
 
-const userService = new UserService({
-    host: 'localhost',
-    port: 5432,
-    user: 'postgres',
-    password: 'postgres',
-    database: 'mojabaza',
-}, schemaName);
+const dbConnection = new DBConnection(dbConfig, schemaName);
 
+const authService = new AuthService(dbConnection, jwtSecret);
+const userService = new UserService(dbConnection);
 
-
-authService.connect();
-userService.connect();
+dbConnection.connect();
 
 function authenticateToken(req, res, next) {
-    const authHeader = req.headers['authorization'];
-    const token = authHeader && authHeader.split(' ')[1];
+  const authHeader = req.headers['authorization'];
+  const token = authHeader && authHeader.split(' ')[1];
 
-    if (!token) return res.status(401).json({ message: 'No token provided' });
+  if (!token) return res.status(401).json({ message: 'No token provided' });
 
-    const verification = authService.verifyToken(token);
+  const verification = authService.verifyToken(token);
 
-    if (!verification.valid) {
-        return res.status(403).json({ message: 'Invalid or expired token' });
-    }
+  if (!verification.valid) {
+    return res.status(403).json({ message: 'Invalid or expired token' });
+  }
 
-    req.user = verification.decoded;
-    next();
+  req.user = verification.decoded;
+  next();
 }
 
 app.post('/register', async (req, res) => {
   const { username, password, email } = req.body;
-
   const registrationResponse = await authService.register(username, password, email);
 
   if (registrationResponse.success) {
@@ -70,41 +59,38 @@ app.post('/register', async (req, res) => {
 });
 
 app.post('/login', async (req, res) => {
-    const { username, password } = req.body;
-  
-    const loginResponse = await authService.login(username, password);
-  
-    if (loginResponse.success) {
-      res.json({ message: 'Login successful', token: loginResponse.token });
-    } else {
-      res.status(401).json({ message: 'Invalid username or password' });
-    }
+  const { username, password } = req.body;
+  const loginResponse = await authService.login(username, password);
+
+  if (loginResponse.success) {
+    res.json({ message: 'Login successful', token: loginResponse.token });
+  } else {
+    res.status(401).json({ message: 'Invalid username or password' });
+  }
 });
 
 app.post('/validate-token', async (req, res) => {
-    const { token } = req.body;
-  
-    const isValid = await authService.verifyToken(token);
-    
-    if (isValid.valid) {
-      res.json({ message: 'Token is valid.' });
-    } else {
-      res.status(401).json({ message: 'Token is invalid or expired.' });
-    }
+  const { token } = req.body;
+  const isValid = authService.verifyToken(token);
+
+  if (isValid.valid) {
+    res.json({ message: 'Token is valid.' });
+  } else {
+    res.status(401).json({ message: 'Token is invalid or expired.' });
+  }
 });
 
 app.get('/users', authenticateToken, async (req, res) => {
-    try {
-        const users = await userService.getUsers();
-        res.json(users);
-    } catch (error) {
-        res.status(500).json({ message: 'Error fetching users' });
-    }
+  try {
+    const users = await userService.getUsers();
+    res.json(users);
+  } catch (error) {
+    res.status(500).json({ message: 'Error fetching users' });
+  }
 });
-  
 
 process.on('SIGINT', async () => {
-  await authService.disconnect();
+  await dbConnection.disconnect();
   process.exit();
 });
 
