@@ -1,8 +1,9 @@
 const express = require('express');
 const bodyParser = require('body-parser');
+const cors = require('cors');
 const crypto = require('crypto');
 
-const AuthService = require('./authService');
+const AuthService = require('./authservice');
 const UserService = require('./userService');
 const DBConnection = require('./dbConnection');
 
@@ -25,6 +26,13 @@ const dbConnection = new DBConnection(dbConfig, schemaName);
 
 const authService = new AuthService(dbConnection, jwtSecret);
 const userService = new UserService(dbConnection);
+
+app.use(cors({
+  origin: 'http://localhost:3000',
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+}));
+
 
 dbConnection.connect();
 
