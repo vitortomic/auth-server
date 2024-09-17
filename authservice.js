@@ -29,6 +29,35 @@ class AuthService {
         }
     }
 
+    async register(username, password, email) {
+        try {
+            const checkQuery = `
+                SELECT id FROM "${this.schema}".users WHERE username = $1 OR email = $2
+            `;
+            const checkResult = await this.client.query(checkQuery, [username, email]);
+
+            if (checkResult.rows.length > 0) {
+                console.log('Username or email already exists.');
+                return { success: false, message: 'Username or email already exists.' };
+            }
+
+            const hashedPassword = await bcrypt.hash(password, 10);
+
+            const insertUserQuery = `
+                INSERT INTO "${this.schema}".users (username, password, email)
+                VALUES ($1, $2, $3)
+                RETURNING id, username, email;
+            `;
+            const result = await this.client.query(insertUserQuery, [username, hashedPassword, email]);
+
+            console.log('User registered:', result.rows[0]);
+            return { success: true, user: result.rows[0] };
+        } catch (error) {
+            console.error('Error registering user:', error.message);
+            return { success: false, message: 'Registration failed.' };
+        }
+    }
+
     async login(username, password) {
         try {
             const query = 'SELECT id, username, password FROM users WHERE username = $1';
@@ -108,35 +137,35 @@ class AuthService {
         }
     }
 
-    async isTokenValid(token) {
-        try {
-            const [base64Header, base64Payload, signature] = token.split('.');
+    verifyToken(token) {
+      try {
+          const [base64Header, base64Payload, signature] = token.split('.');
 
-            const dataToSign = `${base64Header}.${base64Payload}`;
-            const recalculatedSignature = crypto
-                .createHmac('sha256', this.jwtSecret)
-                .update(dataToSign)
-                .digest('base64');
+          const dataToSign = `${base64Header}.${base64Payload}`;
+          const recalculatedSignature = crypto.createHmac('sha256', this.jwtSecret)
+                    .update(dataToSign)
+                    .digest('base64');
+          
 
-            if (signature !== recalculatedSignature) {
-                console.log('Invalid token signature.');
-                return false;
-            }
+          if (signature !== recalculatedSignature) {
+              console.log('Invalid token signature.');
+              return { valid: false, message: 'Invalid token signature' };
+          }
 
-            const payload = JSON.parse(Buffer.from(base64Payload, 'base64').toString('utf-8'));
+          const payload = JSON.parse(Buffer.from(base64Payload, 'base64').toString('utf-8'));
 
-            if (payload.exp < Math.floor(Date.now() / 1000)) {
-                console.log('Token has expired.');
-                return false;
-            }
+          if (payload.exp < Math.floor(Date.now() / 1000)) {
+              console.log('Token has expired.');
+              return { valid: false, message: 'Token has expired' };
+          }
 
-            console.log('Token is valid.');
-            return true;
-        } catch (error) {
-            console.error('Error validating token:', error.message);
-            return false;
-        }
-    }
+          return { valid: true, decoded: payload };
+      } catch (error) {
+          console.error('Error validating token:', error.message);
+          return { valid: false, message: 'Invalid token' };
+      }
+  }
+
 }
 
 module.exports = AuthService;
