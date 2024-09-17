@@ -56,7 +56,7 @@ class AuthService {
     }
   }
 
-  async createToken(userId) {
+  async createToken(username) {
     try {
       const header = {
         alg: 'HS256',
@@ -64,36 +64,53 @@ class AuthService {
       };
 
       const payload = {
-        userId,
-        exp: Math.floor(Date.now() / 1000) + (60 * 60) // 1 hour expiration
+        username,
+        exp: Math.floor(Date.now() / 1000) + (60 * 60) // Expiration time: 1 hour from now
       };
 
-      const base64Header = Buffer.from(JSON.stringify(header)).toString('base64');
-      const base64Payload = Buffer.from(JSON.stringify(payload)).toString('base64');
+      const base64Header = Buffer.from(JSON.stringify(header))
+        .toString('base64')
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, '');
+
+      const base64Payload = Buffer.from(JSON.stringify(payload))
+        .toString('base64')
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, '');
+
       const dataToSign = `${base64Header}.${base64Payload}`;
-      const signature = crypto.createHmac('sha256', this.jwtSecret)
-                              .update(dataToSign)
-                              .digest('base64');
+      const signature = crypto
+        .createHmac('sha256', this.jwtSecret)
+        .update(dataToSign)
+        .digest('base64')
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, '');
+
       const token = `${base64Header}.${base64Payload}.${signature}`;
-
-      const expirationDate = new Date(Date.now() + 60 * 60 * 1000);  // 1 hour expiration
-      const insertTokenQuery = `INSERT INTO tokens (token, user_id, expires_at) VALUES ($1, $2, $3) RETURNING token`;
-      const result = await this.dbConnection.query(insertTokenQuery, [token, userId, expirationDate]);
-
-      console.log('Token created and stored in the database:', result.rows[0].token);
+      console.log('Token created:', token);
       return token;
     } catch (error) {
-      console.error('Error creating and storing token:', error.message);
+      console.error('Error creating token:', error.message);
       throw new Error('Token generation failed');
     }
   }
+
 
   verifyToken(token) {
     try {
       const [base64Header, base64Payload, signature] = token.split('.');
 
       const dataToSign = `${base64Header}.${base64Payload}`;
-      const recalculatedSignature = crypto.createHmac('sha256', this.jwtSecret).update(dataToSign).digest('base64');
+      const recalculatedSignature = crypto
+        .createHmac('sha256', this.jwtSecret)
+        .update(dataToSign)
+        .digest('base64')
+        .replace(/\+/g, '-')
+        .replace(/\//g, '_')
+        .replace(/=+$/, '');
 
       if (signature !== recalculatedSignature) {
         console.log('Invalid token signature.');

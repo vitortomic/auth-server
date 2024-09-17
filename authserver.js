@@ -13,16 +13,7 @@ const jwtSecret = crypto.randomBytes(32).toString('base64');
 
 app.use(bodyParser.json());
 
-const schemaName = 'mojasema';
-const dbConfig = {
-  host: 'localhost',
-  port: 5432,
-  user: 'postgres',
-  password: 'postgres',
-  database: 'mojabaza'
-};
-
-const dbConnection = new DBConnection(dbConfig, schemaName);
+const dbConnection = new DBConnection();
 
 const authService = new AuthService(dbConnection, jwtSecret);
 const userService = new UserService(dbConnection);
