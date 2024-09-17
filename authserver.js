@@ -89,6 +89,21 @@ app.get('/users', authenticateToken, async (req, res) => {
   }
 });
 
+app.get('/current-user', authenticateToken, async (req, res) => {
+    try {
+      const userId = req.user.userId;
+      const currentUser = await userService.getCurrentUser(userId);
+  
+      if (!currentUser) {
+        return res.status(404).json({ message: 'User not found' });
+      }
+  
+      res.json(currentUser);
+    } catch (error) {
+      res.status(500).json({ message: 'Error fetching current user' });
+    }
+  });
+
 process.on('SIGINT', async () => {
   await dbConnection.disconnect();
   process.exit();
